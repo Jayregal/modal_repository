@@ -1,0 +1,42 @@
+name: Azure Static Web Apps CI/CD
+parameters:
+- name: Environment
+  displayName: Environment
+  type: string
+  default: Sentara-digital-se-IND-ui-dev
+  values:
+  - Sentara-digital-se-IND-ui-dev
+  - Sentara-digital-se-IND-ui-QA
+pr:
+  branches:
+    include:
+      - develop
+trigger:
+  branches:
+    include:
+      - develop
+
+jobs:
+- job: build_and_deploy_job
+  displayName: Build and Deploy Job
+  condition: or(eq(variables['Build.Reason'], 'Manual'),or(eq(variables['Build.Reason'], 'PullRequest'),eq(variables['Build.Reason'], 'IndividualCI')))
+  pool:
+    vmImage: ubuntu-latest
+  variables:
+  - group: Azure-Static-Web-Apps-proud-pond-089bc290f-variable-group
+  steps:
+  - checkout: self
+    submodules: true
+  - script: 
+      npm install 
+    displayName: NPM INSTALL
+  - script: 
+      npm run test -- --coverage --watchAll=false
+    displayName: RUN UNIT TESTING
+    condition: succeededOrFailed()
+  - task: AzureStaticWebApp@0
+    inputs:
+      app_location: '/'
+      output_location: 'build'
+      azure_static_web_apps_api_token: $(${{ parameters.Environment }})
+    condition: succeededOrFailed()

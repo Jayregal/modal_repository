@@ -1,0 +1,78 @@
+name: Azure Static Web Apps CI/CD
+parameters:
+- name: Environment
+  displayName: Environment
+  type: string
+  default: Dev
+  values:
+  - Dev
+  - QA
+  - UAT
+  - Prod
+pr:
+  branches:
+    include:
+      - develop
+trigger:
+  branches:
+    include:
+      - develop
+
+jobs:
+- job: build_and_deploy_job
+  displayName: Build and Deploy Job
+  condition: or(eq(variables['Build.Reason'], 'Manual'),or(eq(variables['Build.Reason'], 'PullRequest'),eq(variables['Build.Reason'], 'IndividualCI')))
+  pool:
+    vmImage: ubuntu-latest
+  variables:
+  - group: Azure-Static-Web-Apps-proud-pond-089bc290f-variable-group
+  steps:
+  - checkout: self
+    submodules: true
+  - script: 
+      npm install 
+    displayName: NPM INSTALL
+  - script: 
+      npm run test -- --coverage --watchAll=false
+    displayName: RUN UNIT TESTING
+    condition: succeededOrFailed()
+  - task: reportgenerator@4
+    displayName: Converting lcov to cobertura
+    inputs:
+      reports: 'coverage/lcov.info'#PathWhereLcovFileIsGenerated
+      targetdir: 'coverage/'  #TargetDirWhereCobeturaXMLIsGenerated
+      reporttypes: 'Cobertura' ##TargetReportType
+    condition: succeededOrFailed()
+  - task: PublishCodeCoverageResults@1
+    inputs:
+      codeCoverageTool: 'Cobertura' 
+      summaryFileLocation: 'coverage/Cobertura.xml' #GenratedAsAbove
+    condition: succeededOrFailed()
+  - task: SonarQubePrepare@5
+    inputs:
+      SonarQube: 'PracticeManager'
+      scannerMode: 'CLI'
+      configMode: 'manual'
+      cliProjectKey: '12352_sentara_IND'
+      cliProjectName: '12352_sentara_IND'
+      cliSources: '.'
+    condition: succeededOrFailed()
+  - task: SonarQubeAnalyze@5
+    condition: succeededOrFailed()
+  - task: SonarQubePublish@5
+    inputs:
+      pollingTimeoutSec: '300'
+    condition: succeededOrFailed()
+
+  - task: AzureStaticWebApp@0
+    inputs:
+      app_location: '/'
+      output_location: 'build'
+      azure_static_web_apps_api_token: $(Sentara-digital-se-IND-ui-${{ parameters.Environment }})
+    env:
+      REACT_APP_SERVER_URL: $(${{ parameters.Environment }}_practice)
+      REACT_APP_SERVER_URL1: $(${{ parameters.Environment }}_provider)
+      REACT_APP_SERVER_URL2: $(${{ parameters.Environment }}_SSO)
+      REACT_APP_TOKEN: $(${{ parameters.Environment }}_subscription)
+      REACT_APP_GOOGLE_TOKEN: $(${{ parameters.Environment }}_google_token)
+    condition: succeededOrFailed()
